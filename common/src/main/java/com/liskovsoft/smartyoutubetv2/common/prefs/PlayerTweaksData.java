@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build.VERSION;
 
+import com.google.android.exoplayer2.ext.dav1d.Dav1dLibrary;
+import com.liskovsoft.sharedutils.helpers.DeviceHelpers;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.prefs.GlobalPreferences;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
@@ -110,6 +112,8 @@ public class PlayerTweaksData implements ProfileChangeListener {
     private boolean mIsDontResizeVideoToFitDialogEnabled;
     private boolean mIsSuggestionsHorizontallyScrolled;
     private boolean mIsQueueRespectsPlaybackMode;
+    private boolean mIsDav1dEnabled = true;
+    private boolean mIsDav1dUnlock4K;
     private final Runnable mPersistDataInt = this::persistDataInt;
 
     private PlayerTweaksData(Context context) {
@@ -123,6 +127,10 @@ public class PlayerTweaksData implements ProfileChangeListener {
             sInstance = new PlayerTweaksData(context.getApplicationContext());
         }
 
+        return sInstance;
+    }
+
+    public static PlayerTweaksData instance() {
         return sInstance;
     }
 
@@ -692,6 +700,33 @@ public class PlayerTweaksData implements ProfileChangeListener {
         persistData();
     }
 
+    public boolean isDav1dEnabled() {
+        return mIsDav1dEnabled;
+    }
+
+    public void setDav1dEnabled(boolean enable) {
+        mIsDav1dEnabled = enable;
+        updateDav1dState();
+        persistData();
+    }
+
+    public boolean isDav1dUnlock4K() {
+        return mIsDav1dUnlock4K;
+    }
+
+    public void setDav1dUnlock4K(boolean enable) {
+        mIsDav1dUnlock4K = enable;
+        updateDav1dState();
+        persistData();
+    }
+
+    private void updateDav1dState() {
+        int maxHeight = mIsDav1dUnlock4K ? 4320 : 1080;
+        Dav1dLibrary.setEnabled(mIsDav1dEnabled);
+        Dav1dLibrary.setMaxHeight(maxHeight);
+        DeviceHelpers.setSoftwareAV1MaxHeight(mIsDav1dEnabled ? maxHeight : -1);
+    }
+
     private void restoreData() {
         String data = mPrefs.getProfileData(VIDEO_PLAYER_TWEAKS_DATA);
 
@@ -764,8 +799,11 @@ public class PlayerTweaksData implements ProfileChangeListener {
         mIsQuickSkipVideosAltEnabled = Helpers.parseBoolean(split, 58, false);
         mIsAudioTimeStretchingEnabled = Helpers.parseBoolean(split, 59, true);
         mIsQueueRespectsPlaybackMode = Helpers.parseBoolean(split, 60, false);
+        mIsDav1dEnabled = Helpers.parseBoolean(split, 61, true);
+        mIsDav1dUnlock4K = Helpers.parseBoolean(split, 62, false);
 
         updateDefaultValues();
+        updateDav1dState();
     }
 
     public void persistNow() {
@@ -791,7 +829,8 @@ public class PlayerTweaksData implements ProfileChangeListener {
                 mIsUnsafeAudioFormatsEnabled, null, mIsLoopShortsEnabled, mIsQuickSkipShortsEnabled, mIsRememberPositionOfLiveVideosEnabled,
                 mIsOculusQuestFixEnabled, null, mIsExtraLongSpeedListEnabled, mIsQuickSkipVideosEnabled, mIsNetworkErrorFixingDisabled, mIsCommentsPlacedLeft,
                 null, mIsAudioFocusEnabled, mIsDontResizeVideoToFitDialogEnabled, mIsSuggestionsHorizontallyScrolled,
-                mIsQuickSkipShortsAltEnabled, mIsQuickSkipVideosAltEnabled, mIsAudioTimeStretchingEnabled, mIsQueueRespectsPlaybackMode
+                mIsQuickSkipShortsAltEnabled, mIsQuickSkipVideosAltEnabled, mIsAudioTimeStretchingEnabled, mIsQueueRespectsPlaybackMode,
+                mIsDav1dEnabled, mIsDav1dUnlock4K
                 ));
     }
 

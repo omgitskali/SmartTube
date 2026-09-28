@@ -72,6 +72,7 @@ dependencies {
     implementation project(':exoplayer-library')
     implementation project(':exoplayer-extension-okhttp')
     implementation project(':exoplayer-extension-cronet')
+    implementation project(':exoplayer-extension-dav1d')
 
     // implementation 'com.amazon.android:exoplayer:' + amazonExoplayerVersion
     // implementation 'com.amazon.android:extension-okhttp:' + amazonExoplayerVersion
