@@ -724,7 +724,6 @@ public class PlayerTweaksData implements ProfileChangeListener {
         int maxHeight = mIsDav1dUnlock4K ? 4320 : 1080;
         Dav1dLibrary.setEnabled(mIsDav1dEnabled);
         Dav1dLibrary.setMaxHeight(maxHeight);
-        DeviceHelpers.setSoftwareAV1MaxHeight(mIsDav1dEnabled ? maxHeight : -1);
     }
 
     private void restoreData() {

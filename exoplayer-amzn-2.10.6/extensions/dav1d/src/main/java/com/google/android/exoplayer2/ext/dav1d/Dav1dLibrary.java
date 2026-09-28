@@ -64,6 +64,10 @@ public final class Dav1dLibrary {
     return maxHeight;
   }
 
+  public static boolean isResolutionSupported(int height) {
+    return enabled && height <= maxHeight;
+  }
+
   /** Returns the version of the underlying library if available, or null otherwise. */
   @Nullable
   public static String getVersion() {

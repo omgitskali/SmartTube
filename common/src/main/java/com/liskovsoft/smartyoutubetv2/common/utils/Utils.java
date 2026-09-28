@@ -59,6 +59,8 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
+import com.google.android.exoplayer2.ext.dav1d.Dav1dLibrary;
+
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.liskovsoft.sharedutils.helpers.AppInfoHelpers;
 import com.liskovsoft.sharedutils.helpers.DeviceHelpers;
@@ -835,7 +837,7 @@ public class Utils {
             return false;
         }
 
-        if (preset.isAV1Preset() && !DeviceHelpers.isAV1ResolutionSupported(preset.getHeight())) {
+        if (preset.isAV1Preset() && !isAV1ResolutionSupported(preset.getHeight())) {
             return false;
         }
 
@@ -847,7 +849,7 @@ public class Utils {
             return false;
         }
 
-        if (mediaTrack.isAV1Codec() && !DeviceHelpers.isAV1ResolutionSupported(TrackSelectorUtil.getRealHeight(mediaTrack.format))) {
+        if (mediaTrack.isAV1Codec() && !isAV1ResolutionSupported(TrackSelectorUtil.getRealHeight(mediaTrack.format))) {
             return false;
         }
 
@@ -858,6 +860,14 @@ public class Utils {
         //}
 
         return true;
+    }
+
+    public static boolean isAV1Supported() {
+        return DeviceHelpers.isAV1Supported() || Dav1dLibrary.isEnabled();
+    }
+
+    public static boolean isAV1ResolutionSupported(int height) {
+        return DeviceHelpers.isAV1ResolutionSupported(height) || Dav1dLibrary.isResolutionSupported(height);
     }
 
     public static void enableScreensaver(Context activity, boolean enable) {
