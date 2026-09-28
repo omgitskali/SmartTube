@@ -625,6 +625,16 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 option -> mPlayerTweaksData.setSWDecoderForced(option.isSelected()),
                 mPlayerTweaksData.isSWDecoderForced()));
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.enable_dav1d),
+                getContext().getString(R.string.enable_dav1d_desc),
+                option -> mPlayerTweaksData.setDav1dEnabled(option.isSelected()),
+                mPlayerTweaksData.isDav1dEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.unlock_dav1d_4k),
+                getContext().getString(R.string.unlock_dav1d_4k_desc),
+                option -> mPlayerTweaksData.setDav1dUnlock4K(option.isSelected()),
+                mPlayerTweaksData.isDav1dUnlock4K()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.sony_frame_drop_fix),
                 getContext().getString(R.string.sony_frame_drop_fix_desc),
                 option -> mPlayerTweaksData.setSonyFrameDropFixEnabled(option.isSelected()),

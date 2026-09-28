@@ -203,6 +203,7 @@ dependencies {
     implementation project(':exoplayer-library-ui')
     implementation project(':exoplayer-extension-leanback')
     implementation project(':exoplayer-extension-mediasession')
+    implementation project(':exoplayer-extension-dav1d')
 
     // implementation 'com.amazon.android:exoplayer:' + amazonExoplayerVersion
     // implementation 'com.amazon.android:extension-leanback:' + amazonExoplayerVersion

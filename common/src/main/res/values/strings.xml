@@ -454,6 +454,10 @@
     <string name="skip_codec_profile_check_desc">Don\'t check codec support when starting a video. Could be helpful on buggy firmware.</string>
     <string name="force_sw_codec">Force SW video decoder</string>
     <string name="force_sw_codec_desc">Could play almost any video, but performance is very poor.</string>
+    <string name="enable_dav1d">AV1 software decoder (dav1d)</string>
+    <string name="enable_dav1d_desc">Use dav1d software decoder for AV1 video streams when hardware decoding is not supported.</string>
+    <string name="unlock_dav1d_4k">Unlock 4K AV1 software decoding</string>
+    <string name="unlock_dav1d_4k_desc">Allow dav1d software decoding for 4K and higher resolutions. Default is capped at 1080p to prevent stuttering on slower devices.</string>
     <string name="playlist_order">Sort playlist</string>
     <string name="playlist_order_added_date_newer_first">Added date (newer first)</string>
     <string name="playlist_order_added_date_older_first">Added date (older first)</string>

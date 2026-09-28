@@ -82,6 +82,7 @@ public class MainApplication extends MultiDexApplication { // fix: Didn't find c
         }
 
         setupGlobalExceptionHandler();
+        PlayerTweaksData.instance(this);
         setupViewManager();
     }
 
