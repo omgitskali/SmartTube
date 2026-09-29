@@ -18,7 +18,7 @@
 
 set -eu
 
-DAV1D_EXT_PATH="${1:-$(pwd)}"
+DAV1D_EXT_PATH="$(cd "${1:-$(pwd)}" && pwd)"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-${NDK_PATH:-}}}"
 HOST_PLATFORM="${3:-darwin-x86_64}"
 
@@ -51,27 +51,22 @@ fi
 rm -rf "${DAV1D_EXT_PATH}/nativelib"
 mkdir -p "${DAV1D_EXT_PATH}/nativelib"
 
-declare -A NDK_TARGET_MAP
-NDK_TARGET_MAP["arm64-v8a"]="aarch64-linux-android21"
-NDK_TARGET_MAP["armeabi-v7a"]="armv7a-linux-androideabi21"
-NDK_TARGET_MAP["x86_64"]="x86_64-linux-android21"
-NDK_TARGET_MAP["x86"]="i686-linux-android21"
-
-declare -A ABI_MAP
-ABI_MAP["arm64-v8a"]="aarch64-android"
-ABI_MAP["armeabi-v7a"]="arm-android"
-ABI_MAP["x86_64"]="x86_64-android"
-ABI_MAP["x86"]="x86-android"
-
 BUILD_ROOT=$(mktemp -d)
 trap 'rm -rf "${BUILD_ROOT}"' EXIT
 echo "Created temporary build directory: ${BUILD_ROOT}"
 
 cd "${DAV1D_SOURCE_PATH}"
 
-for android_abi in "${!ABI_MAP[@]}"; do
-    ndk_target=${NDK_TARGET_MAP[$android_abi]}
-    original_cross_file="${ABI_MAP[$android_abi]}.meson"
+CONFIGS=(
+    "arm64-v8a:aarch64-linux-android21:aarch64-android"
+    "armeabi-v7a:armv7a-linux-androideabi21:arm-android"
+    "x86_64:x86_64-linux-android21:x86_64-android"
+    "x86:i686-linux-android21:x86-android"
+)
+
+for config in "${CONFIGS[@]}"; do
+    IFS=":" read -r android_abi ndk_target original_cross_prefix <<< "${config}"
+    original_cross_file="${original_cross_prefix}.meson"
 
     echo "Building dav1d for ${android_abi}..."
     ABI_BUILD_DIR="${BUILD_ROOT}/${android_abi}"

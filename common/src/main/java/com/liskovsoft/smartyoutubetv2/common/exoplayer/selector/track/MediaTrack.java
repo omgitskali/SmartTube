@@ -30,7 +30,7 @@ public abstract class MediaTrack {
     public static MediaTrack from(int rendererIndex, TrackGroupArray groups, Definition definition) {
         MediaTrack mediaTrack = forRendererIndex(rendererIndex);
 
-        if (mediaTrack == null || groups == null || definition == null || definition.tracks == null) {
+        if (mediaTrack == null || groups == null || definition == null || definition.tracks == null || definition.tracks.length == 0) {
             return null;
         }
 
