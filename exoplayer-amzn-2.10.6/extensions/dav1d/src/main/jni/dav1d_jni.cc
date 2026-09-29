@@ -74,6 +74,7 @@ jmethodID initForPrivateFrameMethod = nullptr;
 struct Context {
   Dav1dContext* decoder = nullptr;
   ANativeWindow* native_window = nullptr;
+  jobject surface = nullptr;
   int native_window_width = 0;
   int native_window_height = 0;
   int native_window_format = 0;
@@ -186,6 +187,11 @@ DECODER_FUNC(jlong, dav1dInit, jint threads, jint max_frame_delay) {
     if (outputBufferClass != nullptr) {
       decoderDataField = env->GetFieldID(outputBufferClass, "decoderData", "J");
       initForPrivateFrameMethod = env->GetMethodID(outputBufferClass, "initForPrivateFrame", "(II)V");
+      env->DeleteLocalRef(outputBufferClass);
+    }
+    if (env->ExceptionCheck()) {
+      env->ExceptionClear();
+      LOGE("dav1dInit: Failed to find Dav1dOutputBuffer fields/methods");
     }
   }
 
@@ -204,11 +210,12 @@ DECODER_FUNC(jlong, dav1dInit, jint threads, jint max_frame_delay) {
     }
   }
   settings.n_threads = std::max(1, (int)threads);
-  settings.max_frame_delay = max_frame_delay > 0 ? max_frame_delay : 2;
+  settings.max_frame_delay = max_frame_delay > 0 ? max_frame_delay : 1;
 
   int result = dav1d_open(&ctx->decoder, &settings);
   if (result < 0) {
     snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_open failed: %d", result);
+    LOGE("%s", ctx->error_message);
     delete ctx;
     return 0;
   }
@@ -228,6 +235,10 @@ DECODER_FUNC(jlong, dav1dClose, jlong jContext) {
     ANativeWindow_release(ctx->native_window);
     ctx->native_window = nullptr;
   }
+  if (ctx->surface) {
+    env->DeleteGlobalRef(ctx->surface);
+    ctx->surface = nullptr;
+  }
   delete ctx;
   return 0;
 }
@@ -240,16 +251,27 @@ DECODER_FUNC(jint, dav1dDecode, jlong jContext, jobject encodedBuffer, jint leng
   uint8_t* buffer = reinterpret_cast<uint8_t*>(env->GetDirectBufferAddress(encodedBuffer));
   if (!buffer) {
     snprintf(ctx->error_message, sizeof(ctx->error_message), "GetDirectBufferAddress failed");
+    LOGE("%s", ctx->error_message);
     return 1;
   }
 
   Dav1dData data;
-  dav1d_data_wrap(&data, buffer, length, [](const uint8_t* buf, void* user_data) {}, nullptr);
+  uint8_t* dst = dav1d_data_create(&data, length);
+  if (!dst) {
+    snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_data_create failed for size %d", length);
+    LOGE("%s", ctx->error_message);
+    return 1;
+  }
+  memcpy(dst, buffer, length);
 
   int res = dav1d_send_data(ctx->decoder, &data);
-  if (res < 0 && res != DAV1D_ERR(EAGAIN)) {
-    snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_send_data error: %d", res);
-    return 1;
+  if (res < 0) {
+    dav1d_data_unref(&data);
+    if (res != DAV1D_ERR(EAGAIN)) {
+      snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_send_data error: %d (%s)", res, strerror(DAV1D_ERR(res)));
+      LOGE("%s", ctx->error_message);
+      return 1;
+    }
   }
 
   return 0;
@@ -270,7 +292,8 @@ DECODER_FUNC(jint, dav1dGetFrame, jlong jContext, jobject jOutputBuffer) {
     if (res == DAV1D_ERR(EAGAIN)) {
       return 1; // Decode only or need more data
     }
-    snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_get_picture error: %d", res);
+    snprintf(ctx->error_message, sizeof(ctx->error_message), "dav1d_get_picture error: %d (%s)", res, strerror(DAV1D_ERR(res)));
+    LOGE("%s", ctx->error_message);
     return -1;
   }
 
@@ -295,17 +318,34 @@ DECODER_FUNC(jint, dav1dRenderFrame, jlong jContext, jobject surface, jobject jO
   }
   if (!pic) return -1;
 
-  if (ctx->native_window == nullptr) {
-    ctx->native_window = ANativeWindow_fromSurface(env, surface);
-    if (!ctx->native_window) {
-      return -1;
+  if (ctx->surface == nullptr || !env->IsSameObject(ctx->surface, surface)) {
+    if (ctx->native_window) {
+      ANativeWindow_release(ctx->native_window);
+      ctx->native_window = nullptr;
     }
+    if (ctx->surface) {
+      env->DeleteGlobalRef(ctx->surface);
+      ctx->surface = nullptr;
+    }
+    ctx->surface = env->NewGlobalRef(surface);
+    ctx->native_window = ANativeWindow_fromSurface(env, surface);
+    ctx->native_window_width = 0;
+    ctx->native_window_height = 0;
+    ctx->native_window_format = 0;
+  }
+
+  if (!ctx->native_window) {
+    snprintf(ctx->error_message, sizeof(ctx->error_message), "ANativeWindow_fromSurface failed");
+    LOGE("%s", ctx->error_message);
+    return -1;
   }
 
   int buffer_format = (pic->p.bpc == 10) ? kImageFormatP010 : kImageFormatYV12;
   if (ctx->native_window_width != pic->p.w || ctx->native_window_height != pic->p.h ||
       ctx->native_window_format != buffer_format) {
     if (ANativeWindow_setBuffersGeometry(ctx->native_window, pic->p.w, pic->p.h, buffer_format)) {
+      snprintf(ctx->error_message, sizeof(ctx->error_message), "ANativeWindow_setBuffersGeometry failed");
+      LOGE("%s", ctx->error_message);
       return -1;
     }
     ctx->native_window_width = pic->p.w;
@@ -315,6 +355,8 @@ DECODER_FUNC(jint, dav1dRenderFrame, jlong jContext, jobject surface, jobject jO
 
   ANativeWindow_Buffer buffer;
   if (ANativeWindow_lock(ctx->native_window, &buffer, nullptr) || buffer.bits == nullptr) {
+    snprintf(ctx->error_message, sizeof(ctx->error_message), "ANativeWindow_lock failed");
+    LOGE("%s", ctx->error_message);
     return -1;
   }
 

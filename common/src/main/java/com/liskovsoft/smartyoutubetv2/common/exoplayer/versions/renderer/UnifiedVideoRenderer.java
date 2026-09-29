@@ -106,6 +106,12 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
         Log.i(TAG, "enable(): using %s", (mActiveRenderer != null ? mActiveRenderer.getClass().getSimpleName() : "null"));
 
         if (mActiveRenderer != null) {
+            if (mSurface != null) {
+                mActiveRenderer.handleMessage(C.MSG_SET_SURFACE, mSurface);
+            }
+            if (mFrameMetadataListener != null) {
+                mActiveRenderer.handleMessage(C.MSG_SET_VIDEO_FRAME_METADATA_LISTENER, mFrameMetadataListener);
+            }
             mActiveRenderer.enable(configuration, formats, stream, positionUs, joining, offsetUs);
             if (mOperatingRate != 1f) {
                 mActiveRenderer.setOperatingRate(mOperatingRate);
@@ -144,6 +150,12 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
 
             mActiveRenderer = target;
             if (mActiveRenderer != null) {
+                if (mSurface != null) {
+                    mActiveRenderer.handleMessage(C.MSG_SET_SURFACE, mSurface);
+                }
+                if (mFrameMetadataListener != null) {
+                    mActiveRenderer.handleMessage(C.MSG_SET_VIDEO_FRAME_METADATA_LISTENER, mFrameMetadataListener);
+                }
                 mActiveRenderer.enable(mConfiguration, formats, stream, mPositionUs, false, offsetUs);
                 if (mOperatingRate != 1f) {
                     mActiveRenderer.setOperatingRate(mOperatingRate);

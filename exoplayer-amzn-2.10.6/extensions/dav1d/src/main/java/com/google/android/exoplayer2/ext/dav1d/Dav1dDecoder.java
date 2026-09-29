@@ -119,7 +119,7 @@ public final class Dav1dDecoder extends SimpleDecoder<Dav1dInputBuffer, Dav1dOut
       if (getFrameResult == 1) {
         outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
       } else if (getFrameResult == -1) {
-        return new Dav1dDecoderException("Buffer initialization failed.");
+        return new Dav1dDecoderException("Buffer initialization failed: " + dav1dGetErrorMessage(dav1dDecContext));
       }
       outputBuffer.colorInfo = inputBuffer.colorInfo;
     }
@@ -131,7 +131,7 @@ public final class Dav1dDecoder extends SimpleDecoder<Dav1dInputBuffer, Dav1dOut
       throws Dav1dDecoderException {
     int getFrameResult = dav1dRenderFrame(dav1dDecContext, surface, outputBuffer);
     if (getFrameResult == -1) {
-      throw new Dav1dDecoderException("Buffer render failed.");
+      throw new Dav1dDecoderException("Buffer render failed: " + dav1dGetErrorMessage(dav1dDecContext));
     }
   }
 

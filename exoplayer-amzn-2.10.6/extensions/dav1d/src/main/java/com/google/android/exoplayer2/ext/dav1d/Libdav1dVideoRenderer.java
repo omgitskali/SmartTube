@@ -53,7 +53,7 @@ public class Libdav1dVideoRenderer extends BaseRenderer {
   private static final int DEFAULT_INPUT_BUFFER_SIZE = 768 * 1024;
   private static final int DEFAULT_NUM_OF_INPUT_BUFFERS = 4;
   private static final int DEFAULT_NUM_OF_OUTPUT_BUFFERS = 4;
-  private static final int DEFAULT_MAX_FRAME_DELAY = 2;
+  private static final int DEFAULT_MAX_FRAME_DELAY = 1;
 
   private final int numInputBuffers;
   private final int numOutputBuffers;
