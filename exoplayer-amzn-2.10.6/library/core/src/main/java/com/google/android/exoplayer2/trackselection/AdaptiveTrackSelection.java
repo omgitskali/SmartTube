@@ -238,7 +238,7 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
       int totalFixedBandwidth = 0;
       for (int i = 0; i < definitions.length; i++) {
         Definition definition = definitions[i];
-        if (definition == null) {
+        if (definition == null || definition.tracks == null || definition.tracks.length == 0) {
           continue;
         }
         if (definition.tracks.length > 1) {

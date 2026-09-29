@@ -365,30 +365,6 @@ public class DefaultRenderersFactory implements RenderersFactory {
       // The extension is present, but instantiation failed.
       throw new RuntimeException("Error instantiating VP9 extension", e);
     }
-
-    try {
-      Class<?> clazz = Class.forName("com.google.android.exoplayer2.ext.dav1d.Libdav1dVideoRenderer");
-      Constructor<?> constructor =
-          clazz.getConstructor(
-              long.class,
-              android.os.Handler.class,
-              com.google.android.exoplayer2.video.VideoRendererEventListener.class,
-              int.class);
-      Renderer renderer =
-          (Renderer)
-              constructor.newInstance(
-                  allowedVideoJoiningTimeMs,
-                  eventHandler,
-                  eventListener,
-                  MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
-      out.add(extensionRendererIndex++, renderer);
-      Log.i(TAG, "Loaded Libdav1dVideoRenderer.");
-    } catch (ClassNotFoundException e) {
-      // Expected if the app was built without the extension.
-    } catch (Exception e) {
-      // The extension is present, but instantiation failed.
-      throw new RuntimeException("Error instantiating DAV1D extension", e);
-    }
   }
 
   /**

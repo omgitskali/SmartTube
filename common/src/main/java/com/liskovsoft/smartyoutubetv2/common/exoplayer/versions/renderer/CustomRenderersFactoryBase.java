@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.common.exoplayer.versions.renderer;
 
 import android.content.Context;
+import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.Renderer;
 import com.google.android.exoplayer2.audio.MediaCodecAudioRenderer;
@@ -13,13 +14,13 @@ public abstract class CustomRenderersFactoryBase extends DefaultRenderersFactory
         super(context);
     }
 
-    protected void replaceVideoRenderer(ArrayList<Renderer> renderers, MediaCodecVideoRenderer videoRenderer) {
+    protected void replaceVideoRenderer(ArrayList<Renderer> renderers, Renderer videoRenderer) {
         if (renderers != null && videoRenderer != null) {
             Renderer originMediaCodecVideoRenderer = null;
             int index = 0;
 
             for (Renderer renderer : renderers) {
-                if (renderer instanceof MediaCodecVideoRenderer) {
+                if (renderer.getTrackType() == C.TRACK_TYPE_VIDEO || renderer instanceof MediaCodecVideoRenderer) {
                     originMediaCodecVideoRenderer = renderer;
                     break;
                 }

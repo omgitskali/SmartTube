@@ -10,8 +10,11 @@ import com.google.android.exoplayer2.audio.AudioRendererEventListener;
 import com.google.android.exoplayer2.audio.DefaultAudioSink;
 import com.google.android.exoplayer2.drm.DrmSessionManager;
 import com.google.android.exoplayer2.drm.FrameworkMediaCrypto;
+import com.google.android.exoplayer2.ext.dav1d.Dav1dLibrary;
+import com.google.android.exoplayer2.ext.dav1d.Libdav1dVideoRenderer;
 import com.google.android.exoplayer2.mediacodec.MediaCodecSelector;
 import com.google.android.exoplayer2.util.AmazonQuirks;
+import com.google.android.exoplayer2.video.MediaCodecVideoRenderer;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.versions.selector.BlacklistMediaCodecSelector;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
@@ -151,31 +154,40 @@ public class CustomOverridesRenderersFactory extends CustomRenderersFactoryBase 
         super.buildVideoRenderers(context, extensionRendererMode, mediaCodecSelector, drmSessionManager, playClearSamplesWithoutKeys,
                 enableDecoderFallback, eventHandler, eventListener, allowedVideoJoiningTimeMs, out);
         
+        MediaCodecVideoRenderer videoRenderer;
         if (!mPlayerTweaksData.isAmazonFrameDropFixEnabled() && !mPlayerTweaksData.isSonyFrameDropFixEnabled() && !mPlayerTweaksData.isAmlogicFixEnabled()) {
             // Improve performance a bit by eliminating some if conditions presented in tweaks.
             // But we need to obtain codec real name somehow. So use interceptor below.
 
-            DebugInfoMediaCodecVideoRenderer videoRenderer =
+            DebugInfoMediaCodecVideoRenderer debugRenderer =
                     new DebugInfoMediaCodecVideoRenderer(context, mediaCodecSelector, allowedVideoJoiningTimeMs, drmSessionManager,
                         playClearSamplesWithoutKeys, enableDecoderFallback, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
 
-            videoRenderer.enableSetOutputSurfaceWorkaround(true); // Force enable?
+            debugRenderer.enableSetOutputSurfaceWorkaround(true); // Force enable?
+            videoRenderer = debugRenderer;
+        } else {
+            TweaksMediaCodecVideoRenderer tweaksRenderer =
+                    new TweaksMediaCodecVideoRenderer(context, mediaCodecSelector, allowedVideoJoiningTimeMs, drmSessionManager,
+                            playClearSamplesWithoutKeys, enableDecoderFallback, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
 
-            replaceVideoRenderer(out, videoRenderer);
-
-            return;
+            tweaksRenderer.enableFrameDropFix(mPlayerTweaksData.isAmazonFrameDropFixEnabled());
+            tweaksRenderer.enableFrameDropSonyFix(mPlayerTweaksData.isSonyFrameDropFixEnabled());
+            tweaksRenderer.enableAmlogicFix(mPlayerTweaksData.isAmlogicFixEnabled());
+            tweaksRenderer.enableSetOutputSurfaceWorkaround(true); // Force enable?
+            videoRenderer = tweaksRenderer;
         }
 
-        TweaksMediaCodecVideoRenderer videoRenderer =
-                new TweaksMediaCodecVideoRenderer(context, mediaCodecSelector, allowedVideoJoiningTimeMs, drmSessionManager,
-                        playClearSamplesWithoutKeys, enableDecoderFallback, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
+        Libdav1dVideoRenderer dav1dRenderer = null;
+        if (Dav1dLibrary.isAvailable()) {
+            dav1dRenderer = new Libdav1dVideoRenderer(
+                    allowedVideoJoiningTimeMs,
+                    eventHandler,
+                    eventListener,
+                    MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
+        }
 
-        videoRenderer.enableFrameDropFix(mPlayerTweaksData.isAmazonFrameDropFixEnabled());
-        videoRenderer.enableFrameDropSonyFix(mPlayerTweaksData.isSonyFrameDropFixEnabled());
-        videoRenderer.enableAmlogicFix(mPlayerTweaksData.isAmlogicFixEnabled());
-        videoRenderer.enableSetOutputSurfaceWorkaround(true); // Force enable?
-
-        replaceVideoRenderer(out, videoRenderer);
+        UnifiedVideoRenderer unifiedRenderer = new UnifiedVideoRenderer(videoRenderer, dav1dRenderer, mPlayerTweaksData);
+        replaceVideoRenderer(out, unifiedRenderer);
     }
 
     // Exo 2.12, 2.13
