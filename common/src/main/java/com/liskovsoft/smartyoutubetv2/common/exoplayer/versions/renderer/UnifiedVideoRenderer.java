@@ -101,6 +101,11 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
         mState = STATE_ENABLED;
 
         Renderer target = selectRenderer(formats);
+        if (mActiveRenderer != null && mActiveRenderer != target) {
+            deactivateRenderer(mActiveRenderer);
+        } else if (target != mMediaCodecRenderer && mMediaCodecRenderer != null) {
+            deactivateRenderer(mMediaCodecRenderer);
+        }
         mActiveRenderer = target;
 
         Log.i(TAG, "enable(): using %s", (mActiveRenderer != null ? mActiveRenderer.getClass().getSimpleName() : "null"));
@@ -140,12 +145,7 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
                     (target != null ? target.getClass().getSimpleName() : "null"));
 
             if (mActiveRenderer != null) {
-                if (mActiveRenderer.getState() == STATE_STARTED) {
-                    mActiveRenderer.stop();
-                }
-                if (mActiveRenderer.getState() == STATE_ENABLED) {
-                    mActiveRenderer.disable();
-                }
+                deactivateRenderer(mActiveRenderer);
             }
 
             mActiveRenderer = target;
@@ -252,7 +252,7 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
     public void disable() {
         mState = STATE_DISABLED;
         if (mActiveRenderer != null) {
-            mActiveRenderer.disable();
+            deactivateRenderer(mActiveRenderer);
             mActiveRenderer = null;
         }
         mStream = null;
@@ -263,15 +263,11 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
     public void reset() {
         mState = STATE_DISABLED;
         if (mActiveRenderer != null) {
-            mActiveRenderer.reset();
+            deactivateRenderer(mActiveRenderer);
             mActiveRenderer = null;
         }
-        if (mMediaCodecRenderer != null) {
-            mMediaCodecRenderer.reset();
-        }
-        if (mDav1dRenderer != null) {
-            mDav1dRenderer.reset();
-        }
+        deactivateRenderer(mMediaCodecRenderer);
+        deactivateRenderer(mDav1dRenderer);
         mStream = null;
         mStreamFormats = null;
     }
@@ -280,19 +276,24 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
     public void handleMessage(int messageType, @Nullable Object message) throws ExoPlaybackException {
         if (messageType == C.MSG_SET_SURFACE) {
             mSurface = (Surface) message;
-            if (mMediaCodecRenderer != null) {
-                mMediaCodecRenderer.handleMessage(messageType, message);
-            }
-            if (mDav1dRenderer != null) {
-                mDav1dRenderer.handleMessage(messageType, message);
+            if (mSurface == null) {
+                if (mMediaCodecRenderer != null) {
+                    mMediaCodecRenderer.handleMessage(messageType, null);
+                }
+                if (mDav1dRenderer != null) {
+                    mDav1dRenderer.handleMessage(messageType, null);
+                }
+            } else {
+                if (mActiveRenderer != null) {
+                    mActiveRenderer.handleMessage(messageType, message);
+                } else if (mMediaCodecRenderer != null) {
+                    mMediaCodecRenderer.handleMessage(messageType, message);
+                }
             }
         } else if (messageType == C.MSG_SET_VIDEO_FRAME_METADATA_LISTENER) {
             mFrameMetadataListener = (VideoFrameMetadataListener) message;
-            if (mMediaCodecRenderer != null) {
-                mMediaCodecRenderer.handleMessage(messageType, message);
-            }
-            if (mDav1dRenderer != null) {
-                mDav1dRenderer.handleMessage(messageType, message);
+            if (mActiveRenderer != null) {
+                mActiveRenderer.handleMessage(messageType, message);
             }
         } else {
             if (mActiveRenderer != null) {
@@ -300,6 +301,24 @@ public class UnifiedVideoRenderer implements Renderer, RendererCapabilities {
             } else if (mMediaCodecRenderer != null) {
                 mMediaCodecRenderer.handleMessage(messageType, message);
             }
+        }
+    }
+
+    private void deactivateRenderer(@Nullable Renderer renderer) {
+        if (renderer == null) return;
+        try {
+            if (renderer.getState() == STATE_STARTED) {
+                renderer.stop();
+            }
+            if (renderer.getState() == STATE_ENABLED) {
+                renderer.disable();
+            }
+            renderer.reset();
+            // Crucial: Detach output surface so underlying MediaCodec or ANativeWindow
+            // releases its producer connection from the BufferQueue.
+            renderer.handleMessage(C.MSG_SET_SURFACE, null);
+        } catch (Exception e) {
+            Log.e(TAG, "Error deactivating renderer " + renderer.getClass().getSimpleName(), e);
         }
     }
 

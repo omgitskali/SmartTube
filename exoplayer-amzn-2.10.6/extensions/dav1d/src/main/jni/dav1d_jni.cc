@@ -36,6 +36,7 @@
 
 #define LOG_TAG "dav1d_jni"
 #define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__))
+#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__))
 
 #define DECODER_FUNC(RETURN_TYPE, NAME, ...) \
   extern "C" { \
@@ -130,9 +131,9 @@ void RenderFrame8Bit(const Dav1dPicture* pic, ANativeWindow_Buffer& buffer,
     FillPlane(kMidGray, u_dest, uv_stride, uv_copy_width, uv_copy_height);
   } else {
     CopyPlane(reinterpret_cast<const uint8_t*>(pic->data[kPlaneV]),
-              pic->stride[kPlaneU], v_dest, uv_stride, uv_copy_width, uv_copy_height);
+              pic->stride[1], v_dest, uv_stride, uv_copy_width, uv_copy_height);
     CopyPlane(reinterpret_cast<const uint8_t*>(pic->data[kPlaneU]),
-              pic->stride[kPlaneU], u_dest, uv_stride, uv_copy_width, uv_copy_height);
+              pic->stride[1], u_dest, uv_stride, uv_copy_width, uv_copy_height);
   }
 }
 
@@ -176,6 +177,48 @@ void RenderFrame10Bit(const Dav1dPicture* pic, ANativeWindow_Buffer& buffer,
     src_u += src_uv_stride;
     src_v += src_uv_stride;
     dest_uv += dest_uv_stride;
+  }
+}
+
+void RenderFrame10BitTo8Bit(const Dav1dPicture* pic, ANativeWindow_Buffer& buffer,
+                            int32_t copy_width, int32_t copy_height) {
+  const int32_t y_plane_size = buffer.stride * buffer.height;
+  const int32_t uv_height = (buffer.height + 1) / 2;
+  const int32_t uv_stride = AlignTo16(buffer.stride / 2);
+  const int32_t v_plane_size = uv_height * uv_stride;
+
+  uint8_t* uv_base = reinterpret_cast<uint8_t*>(buffer.bits) + y_plane_size;
+  uint8_t* v_dest = uv_base;
+  uint8_t* u_dest = uv_base + v_plane_size;
+
+  const int32_t uv_copy_height = (copy_height + 1) / 2;
+  const int32_t uv_copy_width = (copy_width + 1) / 2;
+
+  // Y plane: 16-bit to 8-bit (shift right by 2)
+  const uint16_t* src_y = reinterpret_cast<const uint16_t*>(pic->data[kPlaneY]);
+  uint8_t* dest_y = reinterpret_cast<uint8_t*>(buffer.bits);
+  ptrdiff_t src_y_stride = pic->stride[kPlaneY] / 2;
+  for (int y = 0; y < copy_height; ++y) {
+    for (int x = 0; x < copy_width; ++x) {
+      dest_y[x] = static_cast<uint8_t>(src_y[x] >> 2);
+    }
+    src_y += src_y_stride;
+    dest_y += buffer.stride;
+  }
+
+  // UV planes: 16-bit to 8-bit
+  const uint16_t* src_u = reinterpret_cast<const uint16_t*>(pic->data[kPlaneU]);
+  const uint16_t* src_v = reinterpret_cast<const uint16_t*>(pic->data[kPlaneV]);
+  ptrdiff_t src_uv_stride = pic->stride[1] / 2;
+  for (int y = 0; y < uv_copy_height; ++y) {
+    for (int x = 0; x < uv_copy_width; ++x) {
+      v_dest[x] = static_cast<uint8_t>(src_v[x] >> 2);
+      u_dest[x] = static_cast<uint8_t>(src_u[x] >> 2);
+    }
+    src_u += src_uv_stride;
+    src_v += src_uv_stride;
+    v_dest += uv_stride;
+    u_dest += uv_stride;
   }
 }
 
@@ -341,21 +384,53 @@ DECODER_FUNC(jint, dav1dRenderFrame, jlong jContext, jobject surface, jobject jO
   }
 
   int buffer_format = (pic->p.bpc == 10) ? kImageFormatP010 : kImageFormatYV12;
+  bool format_fallback_8bit = false;
+
   if (ctx->native_window_width != pic->p.w || ctx->native_window_height != pic->p.h ||
       ctx->native_window_format != buffer_format) {
-    if (ANativeWindow_setBuffersGeometry(ctx->native_window, pic->p.w, pic->p.h, buffer_format)) {
-      snprintf(ctx->error_message, sizeof(ctx->error_message), "ANativeWindow_setBuffersGeometry failed");
+    int geom_res = ANativeWindow_setBuffersGeometry(ctx->native_window, pic->p.w, pic->p.h, buffer_format);
+    if (geom_res != 0 && buffer_format == kImageFormatP010) {
+      LOGW("P010 geometry unsupported (res=%d), falling back to YV12", geom_res);
+      buffer_format = kImageFormatYV12;
+      format_fallback_8bit = true;
+      geom_res = ANativeWindow_setBuffersGeometry(ctx->native_window, pic->p.w, pic->p.h, buffer_format);
+    }
+    if (geom_res != 0) {
+      snprintf(ctx->error_message, sizeof(ctx->error_message),
+               "ANativeWindow_setBuffersGeometry failed: res=%d, w=%d, h=%d, fmt=0x%x",
+               geom_res, pic->p.w, pic->p.h, buffer_format);
       LOGE("%s", ctx->error_message);
       return -1;
     }
     ctx->native_window_width = pic->p.w;
     ctx->native_window_height = pic->p.h;
     ctx->native_window_format = buffer_format;
+  } else if (ctx->native_window_format == kImageFormatYV12 && pic->p.bpc == 10) {
+    format_fallback_8bit = true;
   }
 
   ANativeWindow_Buffer buffer;
-  if (ANativeWindow_lock(ctx->native_window, &buffer, nullptr) || buffer.bits == nullptr) {
-    snprintf(ctx->error_message, sizeof(ctx->error_message), "ANativeWindow_lock failed");
+  int lock_res = ANativeWindow_lock(ctx->native_window, &buffer, nullptr);
+  if (lock_res != 0 || buffer.bits == nullptr) {
+    LOGW("ANativeWindow_lock failed (res=%d, bits=%p), attempting window recovery...", lock_res, buffer.bits);
+    if (ctx->native_window) {
+      ANativeWindow_release(ctx->native_window);
+      ctx->native_window = nullptr;
+    }
+    ctx->native_window = ANativeWindow_fromSurface(env, surface);
+    if (ctx->native_window) {
+      ANativeWindow_setBuffersGeometry(ctx->native_window, pic->p.w, pic->p.h, buffer_format);
+      ctx->native_window_width = pic->p.w;
+      ctx->native_window_height = pic->p.h;
+      ctx->native_window_format = buffer_format;
+      lock_res = ANativeWindow_lock(ctx->native_window, &buffer, nullptr);
+    }
+  }
+
+  if (lock_res != 0 || buffer.bits == nullptr) {
+    snprintf(ctx->error_message, sizeof(ctx->error_message),
+             "ANativeWindow_lock failed (res=%d, bits=%p, w=%d, h=%d)",
+             lock_res, buffer.bits, pic->p.w, pic->p.h);
     LOGE("%s", ctx->error_message);
     return -1;
   }
@@ -363,13 +438,23 @@ DECODER_FUNC(jint, dav1dRenderFrame, jlong jContext, jobject surface, jobject jO
   int32_t copy_height = std::min((int32_t)pic->p.h, (int32_t)buffer.height);
   int32_t copy_width = std::min((int32_t)pic->p.w, (int32_t)buffer.stride);
 
-  if (pic->p.bpc == 10) {
+  if (pic->p.bpc == 10 && !format_fallback_8bit) {
     RenderFrame10Bit(pic, buffer, copy_width, copy_height);
+  } else if (pic->p.bpc == 10 && format_fallback_8bit) {
+    RenderFrame10BitTo8Bit(pic, buffer, copy_width, copy_height);
   } else {
     RenderFrame8Bit(pic, buffer, copy_width, copy_height);
   }
 
-  return ANativeWindow_unlockAndPost(ctx->native_window);
+  int unlock_res = ANativeWindow_unlockAndPost(ctx->native_window);
+  if (unlock_res != 0) {
+    snprintf(ctx->error_message, sizeof(ctx->error_message),
+             "ANativeWindow_unlockAndPost failed: %d", unlock_res);
+    LOGE("%s", ctx->error_message);
+    return -1;
+  }
+
+  return 0;
 }
 
 DECODER_FUNC(void, dav1dReleaseFrame, jlong jContext, jobject jOutputBuffer) {

@@ -38,4 +38,14 @@ public class UnifiedVideoRendererTest {
         assertEquals("Without inner renderers, AV1 must return unsupported",
                 RendererCapabilities.FORMAT_UNSUPPORTED_TYPE, unifiedRenderer.supportsFormat(av1Format));
     }
+
+    @Test
+    public void testHandleMessageWithNulls() throws Exception {
+        UnifiedVideoRenderer unifiedRenderer = new UnifiedVideoRenderer(null, null, null);
+        // Ensure handleMessage doesn't throw NullPointerException when inner renderers are null
+        unifiedRenderer.handleMessage(C.MSG_SET_SURFACE, null);
+        unifiedRenderer.handleMessage(C.MSG_SET_VIDEO_FRAME_METADATA_LISTENER, null);
+        unifiedRenderer.disable();
+        unifiedRenderer.reset();
+    }
 }
